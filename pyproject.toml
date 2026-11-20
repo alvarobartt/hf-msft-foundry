@@ -1,6 +1,6 @@
 [project]
 name = "hf-msft-foundry"
-version = "0.1.0"
+version = "0.1.1"
 description = "Deploy open models from the Hugging Face collection on Microsoft Foundry"
 readme = "README.md"
 authors = [
