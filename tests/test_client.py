@@ -1,20 +1,17 @@
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 from urllib.parse import parse_qsl, urlsplit
 
 import pytest
 import requests
 from azure.core.credentials import AccessToken
-from azure.core.exceptions import ResourceNotFoundError
-from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
 from requests.adapters import BaseAdapter
 
 from hf_msft_foundry.client import Foundry
 from hf_msft_foundry.deployments import default_deployment_name
-from hf_msft_foundry.errors import DeploymentFailedError, NotFoundError
+from hf_msft_foundry.errors import AzureRequestError, DeploymentFailedError, NotFoundError
 from hf_msft_foundry.registry import to_foundry_name
 
 SUBSCRIPTION = "00000000-0000-0000-0000-000000000000"
@@ -39,6 +36,7 @@ class Req:
     method: str
     path: str
     params: dict[str, str] = field(default_factory=dict)
+    body: Any = None
 
 
 class Adapter(BaseAdapter):
@@ -56,7 +54,8 @@ class Adapter(BaseAdapter):
         proxies: Mapping[str, str] | None = None,
     ) -> requests.Response:
         parts = urlsplit(request.url or "")
-        resp = self.handler(Req(request.method or "GET", parts.path, dict(parse_qsl(parts.query))))
+        body = json.loads(request.body) if request.body else None
+        resp = self.handler(Req(request.method or "GET", parts.path, dict(parse_qsl(parts.query)), body))
         response = requests.Response()
         response.status_code = resp.status_code
         response._content = json.dumps(resp.json).encode() if resp.json is not None else b""
@@ -138,99 +137,92 @@ def registry(request: Req) -> Resp:
     return Resp(404, {"error": {"code": "NotFound"}})
 
 
-class Item(SimpleNamespace):
-    def as_dict(self) -> dict[str, Any]:
-        return self.__dict__.get("raw", {})
+def usage(scope: str, used: int, limit: int) -> dict[str, Any]:
+    return {
+        "name": {"value": f"ManagedCompute.{scope}.H100_80GB"},
+        "currentValue": used,
+        "limit": limit,
+        "offerScope": scope,
+    }
 
 
-class FakeDeployments:
+CAPACITY = {
+    "acceleratorType": "H100_80GB",
+    "availableAccelerators": 8,
+    "offerScope": "Global",
+    "deploymentSizeCapacities": [{"modelInstanceAcceleratorCount": 2, "largestDeploymentCapacity": 4}],
+}
+
+
+class FakeArm:
     def __init__(self) -> None:
-        self.items: dict[str, dict[str, Any]] = {}
-        self.created: list[Any] = []
+        self.deployments: dict[str, dict[str, Any]] = {}
+        self.created: list[dict[str, Any]] = []
+        self.provisioned: list[str] = []
+        self.failure: Resp | None = None
 
-    def list(self, resource_group: str, account: str) -> list[Item]:
-        return [Item(raw=item) for item in self.items.values()]
+    def __call__(self, request: Req) -> Resp:
+        path = request.path
+        if self.failure and path.startswith(f"/subscriptions/{SUBSCRIPTION}"):
+            return self.failure
+        if not path.startswith(f"/subscriptions/{SUBSCRIPTION}"):
+            return registry(request)
+        if path.endswith("/providers/Microsoft.CognitiveServices/accounts"):
+            accounts = [{"id": ACCOUNT_ID, "name": "demo", "location": "eastus", "kind": "AIServices"}]
+            return Resp(200, {"value": [*accounts, {"id": ACCOUNT_ID, "name": "other", "kind": "OpenAI"}]})
+        if path.endswith("/listKeys"):
+            return Resp(200, {"key1": "secret1", "key2": "secret2"})
+        if path.endswith("/managedComputeCapacities"):
+            assert request.params["offer"] == "GlobalManagedCompute"
+            items = [{"properties": CAPACITY}, {"properties": {**CAPACITY, "offerScope": "DataZone"}}]
+            return Resp(200, {"value": items})
+        if path.endswith("/locations/eastus/managedComputeUsages"):
+            return Resp(200, {"value": [usage("Global", 2, 8), usage("DataZone", 0, 0)]})
+        if "/managedComputeDeployments" in path:
+            return self.deployment(request)
+        if request.method == "PUT":
+            self.provisioned.append(path)
+            return Resp(201, {})
+        if request.method == "GET" and path in self.provisioned:
+            return Resp(200, {"properties": {"provisioningState": "Succeeded"}})
+        return Resp(404, {"error": {"code": "NotFound", "message": "Not found"}})
 
-    def get(self, resource_group: str, account: str, name: str) -> Item:
-        if name not in self.items:
-            raise ResourceNotFoundError("Not found")
-        if self.items[name]["properties"]["provisioningState"] == "Creating":
-            self.items[name]["properties"]["provisioningState"] = "Succeeded"
-        return Item(raw=self.items[name])
-
-    def begin_create_or_update(self, resource_group: str, account: str, name: str, resource: Any) -> None:
-        self.created.append(resource)
-        item = resource.as_dict()
-        self.items[name] = {
-            "name": name,
-            **item,
-            "properties": {**item["properties"], "provisioningState": "Creating"},
-        }
-
-    def begin_update(self, resource_group: str, account: str, name: str, properties: Any) -> None:
-        if name not in self.items:
-            raise ResourceNotFoundError("Not found")
-        self.items[name]["sku"]["capacity"] = properties.sku.capacity
-
-    def begin_delete(self, resource_group: str, account: str, name: str) -> None:
-        self.items.pop(name)
-
-
-def usage(scope: str, used: int, limit: int) -> Item:
-    return Item(
-        raw={
-            "name": {"value": f"ManagedCompute.{scope}.H100_80GB"},
-            "currentValue": used,
-            "limit": limit,
-            "offerScope": scope,
-        }
-    )
-
-
-class FakeManagement:
-    def __init__(self) -> None:
-        self.managed_compute_deployments = FakeDeployments()
-        self.accounts = SimpleNamespace(
-            list=lambda: [Item(id=ACCOUNT_ID, name="demo", location="eastus", kind="AIServices")],
-            list_keys=lambda resource_group, account: SimpleNamespace(key1="secret1", key2="secret2"),
-        )
-        capacity = {
-            "acceleratorType": "H100_80GB",
-            "availableAccelerators": 8,
-            "offerScope": "Global",
-            "deploymentSizeCapacities": [{"modelInstanceAcceleratorCount": 2, "largestDeploymentCapacity": 4}],
-        }
-        self.managed_compute_capacities = SimpleNamespace(
-            list=lambda offer: [
-                Item(raw={"properties": capacity}),
-                Item(raw={"properties": {**capacity, "offerScope": "DataZone"}}),
-            ]
-        )
-        self.managed_compute_usages_operation_group = SimpleNamespace(
-            list=lambda location: [usage("Global", 2, 8), usage("DataZone", 0, 0)]
-        )
+    def deployment(self, request: Req) -> Resp:
+        name = request.path.rsplit("/managedComputeDeployments", 1)[1].strip("/")
+        if not name:
+            return Resp(200, {"value": list(self.deployments.values())})
+        if request.method == "PUT":
+            self.created.append(request.body)
+            properties = {**request.body["properties"], "provisioningState": "Creating"}
+            self.deployments[name] = {"name": name, **request.body, "properties": properties}
+            return Resp(201, self.deployments[name])
+        if name not in self.deployments:
+            return Resp(404, {"error": {"code": "NotFound", "message": "Not found"}})
+        item = self.deployments[name]
+        if request.method == "PATCH":
+            item["sku"]["capacity"] = request.body["sku"]["capacity"]
+        elif request.method == "DELETE":
+            self.deployments.pop(name)
+            return Resp(202)
+        elif item["properties"]["provisioningState"] == "Creating":
+            item["properties"]["provisioningState"] = "Succeeded"
+        return Resp(200, item)
 
 
 @pytest.fixture
-def management() -> FakeManagement:
-    return FakeManagement()
+def arm() -> FakeArm:
+    return FakeArm()
 
 
-def make_foundry(management: FakeManagement, account: str = "demo") -> Foundry:
+def make_foundry(arm: FakeArm, account: str = "demo") -> Foundry:
     session = requests.Session()
-    session.mount("https://", Adapter(registry))
-    return Foundry(
-        subscription_id=SUBSCRIPTION,
-        account_name=account,
-        credential=Credential(),
-        session=session,
-        management=cast(CognitiveServicesManagementClient, management),
-    )
+    session.mount("https://", Adapter(arm))
+    return Foundry(subscription_id=SUBSCRIPTION, account_name=account, credential=Credential(), session=session)
 
 
 @pytest.fixture
-def foundry(management: FakeManagement) -> Foundry:
-    return make_foundry(management)
+def foundry(arm: FakeArm) -> Foundry:
+    return make_foundry(arm)
 
 
 def test_names() -> None:
@@ -311,20 +303,32 @@ def test_account_capacity_quota_keys(foundry: Foundry) -> None:
     assert foundry.accounts.keys(foundry.account) == {"key1": "secret1", "key2": "secret2"}
 
 
-def test_missing_account(management: FakeManagement) -> None:
+def test_missing_account(arm: FakeArm) -> None:
     with pytest.raises(NotFoundError, match="'missing' not found"):
-        _ = make_foundry(management, "missing").account
+        _ = make_foundry(arm, "missing").account
 
 
-def test_deploy_scale_delete(foundry: Foundry, management: FakeManagement) -> None:
+def test_create_account(foundry: Foundry, arm: FakeArm) -> None:
+    account = foundry.accounts.create("new", "new-rg", "eastus", interval=0)
+    assert account.endpoint == "https://new.services.ai.azure.com"
+    assert [path.rsplit("/", 2)[-2:] for path in arm.provisioned] == [
+        ["resourcegroups", "new-rg"],
+        ["accounts", "new"],
+        ["projects", "new-project"],
+    ]
+
+
+def test_deploy_scale_delete(foundry: Foundry, arm: FakeArm) -> None:
     deployment = foundry.deploy(
         "google/gemma-4-31B-it", template="google--gemma-4-31b-it--256k-nvidia-2xh100", name="gemma"
     )
-    body = management.managed_compute_deployments.created[0]
-    assert body.properties.model == MODEL
-    assert body.properties.deployment_template.endswith("google--gemma-4-31b-it--256k-nvidia-2xh100/labels/latest")
-    assert body.properties.accelerator_type == "H100_80GB"
-    assert body.sku.name == "GlobalManagedCompute" and body.sku.capacity == 1
+    body = arm.created[0]
+    assert body["properties"]["model"] == MODEL
+    assert body["properties"]["deploymentTemplate"].endswith(
+        "google--gemma-4-31b-it--256k-nvidia-2xh100/labels/latest"
+    )
+    assert body["properties"]["acceleratorType"] == "H100_80GB"
+    assert body["sku"] == {"name": "GlobalManagedCompute", "capacity": 1}
     assert deployment.state == "Succeeded"
     assert foundry.deployments.wait("gemma", interval=0).state == "Succeeded"
     assert foundry.deployments.update("gemma", instances=2).instances == 2
@@ -347,6 +351,23 @@ def test_deploy_default_name(foundry: Foundry) -> None:
     assert foundry.deploy("google/gemma-4-31B-it").name.startswith("google--gemma-4-31b-it--")
 
 
+def test_rejects_invalid_deployment_names(foundry: Foundry) -> None:
+    for name in ["", "a", "gemma-4.1"]:
+        with pytest.raises(ValueError, match="Invalid deployment name"):
+            foundry.deployments.delete(name)
+
+
+def test_network_errors_raise_azure_request_error() -> None:
+    def disconnect(request: Req) -> Resp:
+        raise requests.ConnectionError("Remote end closed connection without response")
+
+    session = requests.Session()
+    session.mount("https://", Adapter(disconnect))
+    foundry = Foundry(subscription_id=SUBSCRIPTION, account_name="demo", credential=Credential(), session=session)
+    with pytest.raises(AzureRequestError, match="Remote end closed connection"):
+        foundry.deployments.all()
+
+
 def test_delete_and_scale_missing_deployment(foundry: Foundry) -> None:
     with pytest.raises(NotFoundError, match="Deployment 'missing' not found"):
         foundry.deployments.delete("missing")
@@ -354,10 +375,17 @@ def test_delete_and_scale_missing_deployment(foundry: Foundry) -> None:
         foundry.deployments.update("missing", instances=2)
 
 
-def test_wait_raises_on_failure(foundry: Foundry, management: FakeManagement) -> None:
-    management.managed_compute_deployments.items["broken"] = {
+def test_wait_raises_on_failure(foundry: Foundry, arm: FakeArm) -> None:
+    arm.deployments["broken"] = {
         "name": "broken",
         "properties": {"provisioningState": "Failed"},
     }
     with pytest.raises(DeploymentFailedError, match="Failed"):
         foundry.deployments.wait("broken", interval=0)
+
+
+def test_azure_error_message(foundry: Foundry, arm: FakeArm) -> None:
+    _ = foundry.account
+    arm.failure = Resp(409, {"error": {"code": "RequestConflict", "message": "Deployment is being created"}})
+    with pytest.raises(AzureRequestError, match="409: RequestConflict: Deployment is being created"):
+        foundry.deployments.all()

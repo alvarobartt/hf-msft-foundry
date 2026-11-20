@@ -4,7 +4,6 @@ from functools import cached_property
 
 import requests
 from azure.core.credentials import TokenCredential
-from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
 
 from hf_msft_foundry.accounts import Account, Accounts
 from hf_msft_foundry.azure import ARM, AzureClient
@@ -20,13 +19,11 @@ class Foundry:
         account_name: str | None = None,
         credential: TokenCredential | None = None,
         session: requests.Session | None = None,
-        management: CognitiveServicesManagementClient | None = None,
     ) -> None:
         self.azure = AzureClient(credential=credential, session=session)
         self.registry = Registry(self.azure)
         self._subscription_id = subscription_id or os.getenv("AZURE_SUBSCRIPTION_ID")
         self._account_name = account_name or os.getenv("FOUNDRY_ACCOUNT_NAME")
-        self._management = management
 
     @cached_property
     def subscription_id(self) -> str:
@@ -48,12 +45,8 @@ class Foundry:
         return subscriptions[0]["subscriptionId"]
 
     @cached_property
-    def management(self) -> CognitiveServicesManagementClient:
-        return self._management or CognitiveServicesManagementClient(self.azure.credential, self.subscription_id)
-
-    @cached_property
     def accounts(self) -> Accounts:
-        return Accounts(self.management, self.azure, self.subscription_id)
+        return Accounts(self.azure, self.subscription_id)
 
     @cached_property
     def account(self) -> Account:
@@ -61,7 +54,7 @@ class Foundry:
 
     @cached_property
     def deployments(self) -> Deployments:
-        return Deployments(self.management, self.account)
+        return Deployments(self.azure, self.account)
 
     @cached_property
     def prices(self) -> Prices:

@@ -4,16 +4,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from azure.mgmt.cognitiveservices import CognitiveServicesManagementClient
-from azure.mgmt.cognitiveservices.models import (
-    ManagedComputeDeployment,
-    ManagedComputeDeploymentProperties,
-    PatchResourceSku,
-    Sku,
-)
-
-from hf_msft_foundry.accounts import Account
-from hf_msft_foundry.azure import azure_errors
+from hf_msft_foundry.accounts import API_VERSION, Account
+from hf_msft_foundry.azure import AzureClient
 from hf_msft_foundry.errors import DeploymentFailedError, NotFoundError
 from hf_msft_foundry.registry import Model, Template, template_name
 
@@ -28,6 +20,13 @@ def default_deployment_name(model: str, now: float | None = None) -> str:
     suffix = f"{int(time.time() if now is None else now) % 10**7:07d}"
     name = re.sub(r"[^a-z0-9-]", "-", model.lower())
     return f"{name[: 64 - len(suffix) - 2].rstrip('-')}--{suffix}"
+
+
+def validate_name(name: str) -> None:
+    if not NAME_PATTERN.fullmatch(name):
+        raise ValueError(
+            f"Invalid deployment name '{name}', use 2 to 64 letters, digits, underscores or hyphens (no dots)"
+        )
 
 
 @dataclass
@@ -55,29 +54,29 @@ class Deployment:
 
 
 class Deployments:
-    def __init__(self, management: CognitiveServicesManagementClient, account: Account) -> None:
-        self.operations = management.managed_compute_deployments
+    def __init__(self, azure: AzureClient, account: Account) -> None:
+        self.azure = azure
         self.account = account
+        self.url = f"{account.resource_url}/managedComputeDeployments"
+        self.params = {"api-version": API_VERSION}
 
     def not_found(self, name: str) -> str:
         return f"Deployment '{name}' not found in the Microsoft Foundry resource '{self.account.name}'"
 
     def all(self) -> list[Deployment]:
-        with azure_errors(f"Microsoft Foundry resource '{self.account.name}' not found"):
-            items = list(self.operations.list(self.account.resource_group, self.account.name))
-        return [Deployment.from_arm(item.as_dict()) for item in items]
+        items = self.azure.paginate(
+            self.url, self.params, not_found=f"Microsoft Foundry resource '{self.account.name}' not found"
+        )
+        return [Deployment.from_arm(item) for item in items]
 
     def get(self, name: str) -> Deployment:
-        with azure_errors(self.not_found(name)):
-            item = self.operations.get(self.account.resource_group, self.account.name, name)
-        return Deployment.from_arm(item.as_dict())
+        validate_name(name)
+        item = self.azure.request("GET", f"{self.url}/{name}", not_found=self.not_found(name), params=self.params)
+        return Deployment.from_arm(item)
 
     def create(self, model: Model, template: Template, name: str | None = None, instances: int = 1) -> Deployment:
         name = name or default_deployment_name(model.name)
-        if not NAME_PATTERN.fullmatch(name):
-            raise ValueError(
-                f"Invalid deployment name '{name}', use 2 to 64 letters, digits, underscores or hyphens (no dots)"
-            )
+        validate_name(name)
         price = f", ${template.price_per_hour}/hour" if template.price_per_hour is not None else ""
         logger.info(
             "Deploying %s (version %s) as '%s' with %s (%s x %s x %s instance(s)%s)",
@@ -90,38 +89,37 @@ class Deployments:
             instances,
             price,
         )
-        with azure_errors(f"Microsoft Foundry resource '{self.account.name}' not found"):
-            self.operations.begin_create_or_update(
-                self.account.resource_group,
-                self.account.name,
-                name,
-                ManagedComputeDeployment(
-                    sku=Sku(name=SKU, capacity=instances),
-                    properties=ManagedComputeDeploymentProperties(
-                        model=model.uri,
-                        deployment_template=template.uri,
-                        accelerator_type=template.accelerator_type,
-                        version_upgrade_option="OnceNewDefaultVersionAvailable",
-                    ),
-                ),
-            )
+        self.azure.request(
+            "PUT",
+            f"{self.url}/{name}",
+            not_found=f"Microsoft Foundry resource '{self.account.name}' not found",
+            params=self.params,
+            json={
+                "sku": {"name": SKU, "capacity": instances},
+                "properties": {
+                    "model": model.uri,
+                    "deploymentTemplate": template.uri,
+                    "acceleratorType": template.accelerator_type,
+                    "versionUpgradeOption": "OnceNewDefaultVersionAvailable",
+                },
+            },
+        )
         return self.get(name)
 
     def update(self, name: str, instances: int) -> Deployment:
         logger.info("Scaling deployment '%s' to %s instance(s)", name, instances)
-        with azure_errors(self.not_found(name)):
-            self.operations.begin_update(
-                self.account.resource_group,
-                self.account.name,
-                name,
-                PatchResourceSku(sku=Sku(name=SKU, capacity=instances)),
-            )
+        self.azure.request(
+            "PATCH",
+            f"{self.url}/{name}",
+            not_found=self.not_found(name),
+            params=self.params,
+            json={"sku": {"name": SKU, "capacity": instances}},
+        )
         return self.get(name)
 
     def delete(self, name: str) -> None:
         self.get(name)
-        with azure_errors(self.not_found(name)):
-            self.operations.begin_delete(self.account.resource_group, self.account.name, name)
+        self.azure.request("DELETE", f"{self.url}/{name}", not_found=self.not_found(name), params=self.params)
         logger.info("Deleting deployment '%s'", name)
 
     def wait(self, name: str, interval: int = 30) -> Deployment:

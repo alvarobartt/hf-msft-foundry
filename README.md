@@ -11,7 +11,7 @@
 hf extensions install alvarobartt/hf-msft-foundry
 ```
 
-Or install it from [PyPI](https://pypi.org/project/hf-msft-foundry/) with `pip install hf-msft-foundry` or `uv tool install --prerelease=allow hf-msft-foundry`, and use it as `hf-msft-foundry` instead of `hf msft-foundry`.
+Or install it from [PyPI](https://pypi.org/project/hf-msft-foundry/) with `pip install hf-msft-foundry` or `uv tool install hf-msft-foundry`, and use it as `hf-msft-foundry` instead of `hf msft-foundry`.
 
 ## Authentication
 
