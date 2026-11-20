@@ -1,36 +1,49 @@
 [project]
-name = "hfoundry"
+name = "hf-msft-foundry"
 version = "0.1.0"
-description = "From the Hugging Face Hub to Microsoft Foundry"
+description = "Deploy open models from the Hugging Face collection on Microsoft Foundry"
 readme = "README.md"
 authors = [
     { name = "Alvaro Bartolome", email = "36760800+alvarobartt@users.noreply.github.com" }
 ]
-requires-python = ">=3.10,<3.13"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
 dependencies = [
-    "azure-ai-ml>=1.30.0",
     "azure-identity>=1.25.1",
-    "huggingface-hub[hf-xet]>=1.1.7",
+    "azure-mgmt-cognitiveservices==15.1.0b1",
+    "requests>=2.32.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/alvarobartt/hf-msft-foundry"
+Repository = "https://github.com/alvarobartt/hf-msft-foundry"
+Issues = "https://github.com/alvarobartt/hf-msft-foundry/issues"
+
 [project.scripts]
-hfoundry = "hfoundry.cli:main"
+hf-msft-foundry = "hf_msft_foundry.cli:main"
+
+[[tool.uv.index]]
+url = "https://pypi.org/simple"
+default = true
 
 [build-system]
-requires = ["uv_build>=0.9.5,<0.10.0"]
+requires = ["uv_build>=0.9.5,<0.11.0"]
 build-backend = "uv_build"
-
-[tool.ruff]
-line-length = 88
-
-[tool.ruff.lint]
-select = ["I"]
-
-[tool.ruff.lint.isort]
-force-single-line = false
 
 [dependency-groups]
 lint = [
-    "pre-commit>=4.5.0",
-    "ruff>=0.14.8",
+    "pre-commit>=4.5.1",
+    "ruff>=0.14.10",
+    "ty>=0.0.1a32",
+    "types-requests>=2.32.0",
 ]
+test = [
+    "pytest>=8.4.0",
+]
+
+[tool.ruff]
+line-length = 119
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
