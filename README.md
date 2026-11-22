@@ -1,6 +1,6 @@
 # `hf-msft-foundry`
 
-`hf-msft-foundry` is an open-source extension for the [`hf` CLI](https://huggingface.co/docs/huggingface_hub/guides/cli) to easily manage and deploy open-models from the Hugging Face Hub on [Microsoft Foundry](https://ai.azure.com/nextgen) with an optimized recipe on NVIDIA A100, NVIDIA H100, NVIDIA H200, and AMD MI300X via managed compute.
+`hf-msft-foundry` is an open-source extension for the [`hf` CLI](https://huggingface.co/docs/huggingface_hub/guides/cli) to easily manage and deploy open-models from the Hugging Face Hub on [Microsoft Foundry](https://ai.azure.com/nextgen) with optimized recipes for managed compute instances powered by NVIDIA A100, H100, H200, or AMD MI300X GPUs.
 
 ## Installation
 
