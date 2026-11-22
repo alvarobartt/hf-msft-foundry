@@ -1,9 +1,6 @@
 # `hf-msft-foundry`
 
-> [!WARNING]
-> `hf-msft-foundry` is an experimental and independent open source project, not affiliated with or endorsed by Microsoft. Its interface may change without notice.
-
-`hf-msft-foundry` is an extension for the [`hf` CLI](https://huggingface.co/docs/huggingface_hub/guides/cli) to deploy open models from the Hugging Face collection on [Microsoft Foundry](https://ai.azure.com), on managed compute within your own Azure subscription, without going through the Microsoft Foundry portal.
+`hf-msft-foundry` is an open-source extension for the [`hf` CLI](https://huggingface.co/docs/huggingface_hub/guides/cli) to easily manage and deploy open-models from the Hugging Face Hub on [Microsoft Foundry](https://ai.azure.com/nextgen) with optimized recipes for managed compute on NVIDIA A100, NVIDIA H100, NVIDIA H200, or AMD MI300X.
 
 ## Installation
 
