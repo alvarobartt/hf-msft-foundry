@@ -1,7 +1,7 @@
 [project]
 name = "hf-msft-foundry"
-version = "0.1.1"
-description = "Deploy open models from the Hugging Face collection on Microsoft Foundry"
+version = "0.2.0"
+description = "Hugging Face CLI extension to deploy open-models, with optimized recipes, from the Hub on Microsoft Foundry."
 readme = "README.md"
 authors = [
     { name = "Alvaro Bartolome", email = "36760800+alvarobartt@users.noreply.github.com" }
