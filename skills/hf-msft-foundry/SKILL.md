@@ -25,7 +25,7 @@ Deploy, use and stop:
 
 - `deploy <model> [--deployment-template <name or suffix, e.g. 256k-nvidia-h100>]`: uses the default template unless set. Waits until `state` is `Succeeded` (20 to 60 minutes, so run it with a long timeout or in the background), or returns right away with `--no-wait`, then poll `deployments status <name>`. The returned `name` (defaults to `<author>--<model>--<7-digit timestamp>`, letters, digits, `_` and `-` only) is the `model` to set in requests.
 - `deployments list`, `deployments status <name>`, `deployments scale <name> --instances <n>`.
-- `deployments delete <name> --wait`: always delete what you deployed once done, as deployments are billed per hour while running.
+- `deployments delete <name> --wait`: deletes a deployment and stops billing. If the user asked to keep it running, wait for their confirmation before deleting it.
 
 Send requests to `chat-completion` deployments with any OpenAI-compatible client, setting the deployment name as the `model`, `openai_base_url` from `accounts info` as the base URL, and `key1` from `accounts keys` as the API key:
 
@@ -39,3 +39,5 @@ curl "$(hf msft-foundry accounts info -o json | jq -r .openai_base_url)/chat/com
 - Reasoning models spend tokens before answering, leave room in `max_completion_tokens`.
 - Deployments can't reach the internet, send images as base64 data URIs instead of URLs.
 - Never print or store the API keys beyond what's needed for the request.
+
+Launch a coding harness with `hf msft-foundry pi <deployment>` or `hf msft-foundry opencode <deployment>`. Use `--` before harness-specific arguments. [Agent harness configuration and examples](https://github.com/alvarobartt/hf-msft-foundry/blob/main/docs/agent-harnesses.md)

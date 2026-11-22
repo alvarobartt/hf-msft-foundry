@@ -93,9 +93,19 @@ hf msft-foundry deployments delete google--gemma-4-26b-a4b-it--5083872 --wait
 | `deployments {list,status,wait,scale,delete}` | Manage the deployments |
 | `accounts {list,info,keys,create}` | Manage the Microsoft Foundry resources |
 | `capacity` / `quota` | Show the available accelerators and the managed compute quota |
+| `pi [<deployment>]` / `opencode [<deployment>]` | Launch a coding agent against a ready chat deployment |
 
 All commands accept `-o json` for machine-readable output, including errors.
 
 ## Agents
+
+Launch Pi or OpenCode from your project directory. Pass a ready chat deployment name, or omit it when the account has only one ready deployment.
+
+```bash
+hf msft-foundry pi my-gemma-4
+hf msft-foundry opencode my-gemma-4
+```
+
+[Pi and OpenCode setup and session examples](https://github.com/alvarobartt/hf-msft-foundry/blob/main/docs/agent-harnesses.md)
 
 The [`hf-msft-foundry` skill](https://github.com/alvarobartt/hf-msft-foundry/blob/main/skills/hf-msft-foundry/SKILL.md) teaches agents how to find, deploy, use and delete models on Microsoft Foundry with `hf-msft-foundry`.
