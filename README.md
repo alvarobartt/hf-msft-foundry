@@ -15,7 +15,7 @@ Install the standalone `hf-msft-foundry` command with `pip install hf-msft-found
 
 ## Authentication
 
-Sign in with `az login` or use a service principal or managed identity, then set `AZURE_SUBSCRIPTION_ID` and `FOUNDRY_ACCOUNT_NAME` if you need to override the active subscription or choose among multiple Microsoft Foundry resources. For an individual command, pass `--subscription-id` or `--account`.
+Authenticate with `az login`, a service principal, or a managed identity, then use `AZURE_SUBSCRIPTION_ID` and `FOUNDRY_ACCOUNT_NAME` to override the default subscription or select a Microsoft Foundry resource, or pass `--subscription-id` and `--account` for a single command.
 
 To create a Microsoft Foundry resource, run the following command.
 
@@ -67,14 +67,14 @@ Send images as base64 data URIs because deployments cannot fetch remote URLs.
 
 ## Coding agents
 
-Once the chat deployment reaches `Succeeded`, launch Pi 1.x or OpenCode 2.x from your project directory with its executable on `PATH` and an Azure identity that can list the Microsoft Foundry account keys. [Install Pi](https://docs.pi.dev/latest/quickstart) or [install OpenCode](https://opencode.ai/download).
+Choose a model that supports tool calling if the agent needs to read or edit files, then launch Pi 1.x or OpenCode 2.x from your project directory once the deployment reaches `Succeeded`. The harness executable must be on `PATH`, and your Azure identity needs permission to list the Microsoft Foundry account keys. [Install Pi](https://docs.pi.dev/latest/quickstart) or [install OpenCode](https://opencode.ai/download).
 
 ```bash
 hf msft-foundry pi my-gemma-4
 hf msft-foundry opencode my-gemma-4
 ```
 
-You can omit the deployment name when `FOUNDRY_DEPLOYMENT` is set or the account has one ready deployment. Both launchers configure the endpoint and credentials, with Pi saving sessions in a profile per account and deployment and OpenCode using its usual session storage through a standalone server. Choose a model that supports tool calling for file reads and edits.
+Both launchers configure the endpoint and credentials automatically, and you can omit the deployment name when `FOUNDRY_DEPLOYMENT` is set or the account has one ready deployment. Pi stores sessions in a profile per account and deployment, while OpenCode starts a standalone server and uses its usual session storage.
 
 Pass harness arguments after `--`, using `--continue` to resume the latest session or `--session` to select a specific one.
 
