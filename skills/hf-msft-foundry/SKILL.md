@@ -16,7 +16,7 @@ Authentication uses the Azure CLI login (`az login`) or service principal enviro
 
 Find a model and a deployment template:
 
-- `models --search "gemma 4"`: model names, e.g. `google--gemma-4-26b-a4b-it`. Commands take either that name or the Hub ID (`google/gemma-4-26B-A4B-it`).
+- `models list [--search "gemma 4"]`: model names, e.g. `google--gemma-4-26b-a4b-it`. Commands take either that name or the Hub ID (`google/gemma-4-26B-A4B-it`).
 - `models <model>`: `hub_id`, `version`, `task`, `input_modalities`, `context_window`, `default_template` and `templates`. Add `--version <n>` for an older version.
 - `models <model> deployment-templates`: per template, `accelerator_type`, `accelerator_count` (GPUs per instance), `max_model_len`, the engine `environment`, `price_per_hour` (USD, list price per instance) and `default`.
 - `quota` (`used` and `limit` accelerators per type) and `capacity` (`available` accelerators per type, `largest_deployment` per GPU count): a template fits if `used + accelerator_count <= limit` and capacity is available for that type.
