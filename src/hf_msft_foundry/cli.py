@@ -207,7 +207,9 @@ def parser() -> argparse.ArgumentParser:
     quota.add_argument("--location", help="Azure region, defaults to the Microsoft Foundry resource's")
 
     for harness in HARNESSES:
-        agent = commands.add_parser(harness, parents=[common], help=f"Launch {harness} with a Foundry deployment")
+        agent = commands.add_parser(
+            harness, parents=[common], help=f"Launch {harness} with a Microsoft Foundry deployment"
+        )
         agent.add_argument(
             "deployment",
             nargs="?",

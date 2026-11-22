@@ -15,9 +15,9 @@ Install the standalone `hf-msft-foundry` command with `pip install hf-msft-found
 
 ## Authentication
 
-Sign in with `az login` or use a service principal or managed identity, then set `AZURE_SUBSCRIPTION_ID` and `FOUNDRY_ACCOUNT_NAME` if you need to override the active subscription or choose among multiple Foundry resources. For an individual command, pass `--subscription-id` or `--account`.
+Sign in with `az login` or use a service principal or managed identity, then set `AZURE_SUBSCRIPTION_ID` and `FOUNDRY_ACCOUNT_NAME` if you need to override the active subscription or choose among multiple Microsoft Foundry resources. For an individual command, pass `--subscription-id` or `--account`.
 
-To create a Foundry resource, run the following command.
+To create a Microsoft Foundry resource, run the following command.
 
 ```bash
 hf msft-foundry accounts create my-foundry --resource-group my-foundry-rg --location eastus
@@ -67,7 +67,7 @@ Send images as base64 data URIs because deployments cannot fetch remote URLs.
 
 ## Coding agents
 
-Once the chat deployment reaches `Succeeded`, launch Pi 1.x or OpenCode 2.x from your project directory with its executable on `PATH` and an Azure identity that can list the Foundry account keys. [Install Pi](https://docs.pi.dev/latest/quickstart) or [install OpenCode](https://opencode.ai/download).
+Once the chat deployment reaches `Succeeded`, launch Pi 1.x or OpenCode 2.x from your project directory with its executable on `PATH` and an Azure identity that can list the Microsoft Foundry account keys. [Install Pi](https://docs.pi.dev/latest/quickstart) or [install OpenCode](https://opencode.ai/download).
 
 ```bash
 hf msft-foundry pi my-gemma-4
