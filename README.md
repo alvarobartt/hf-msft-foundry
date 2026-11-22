@@ -11,19 +11,19 @@
 hf extensions install alvarobartt/hf-msft-foundry
 ```
 
-Or install it from [PyPI](https://pypi.org/project/hf-msft-foundry/) with `pip install hf-msft-foundry` or `uv tool install hf-msft-foundry`, and use it as `hf-msft-foundry` instead of `hf msft-foundry`.
+Install the standalone `hf-msft-foundry` command with `pip install hf-msft-foundry` or `uv tool install hf-msft-foundry`. [PyPI](https://pypi.org/project/hf-msft-foundry/)
 
 ## Authentication
 
-Log in with `az login`, or set the environment variables for a service principal or managed identity. The subscription and the Microsoft Foundry resource default to the Azure CLI selection and the only resource in the subscription, otherwise set `AZURE_SUBSCRIPTION_ID` and `FOUNDRY_ACCOUNT_NAME`, or pass `--subscription-id` and `--account`.
+Authenticate with `az login`, a service principal, or a managed identity, then use `AZURE_SUBSCRIPTION_ID` and `FOUNDRY_ACCOUNT_NAME` to override the default subscription or select a Microsoft Foundry resource, or pass `--subscription-id` and `--account` for a single command.
 
-If you don't have a Microsoft Foundry resource yet, create one with:
+To create a Microsoft Foundry resource, run the following command.
 
 ```bash
 hf msft-foundry accounts create my-foundry --resource-group my-foundry-rg --location eastus
 ```
 
-## Getting started
+## Deploy a model
 
 | Model | Size | Default deployment template |
 |---|---|---|
@@ -31,32 +31,20 @@ hf msft-foundry accounts create my-foundry --resource-group my-foundry-rg --loca
 | [`nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8) | 120B (12B active) | 2 x NVIDIA H100 at 256K context |
 | [`google/gemma-4-26B-A4B-it`](https://huggingface.co/google/gemma-4-26B-A4B-it) | 26B (4B active) | 1 x NVIDIA A100 at 256K context |
 
-Browse the catalog, search for a model, or see its deployment templates with accelerator, context length and hourly price per instance.
+Browse the catalog to see the GPUs, context lengths, and hourly prices for a model's recipes, then use `quota` and `capacity` to check GPU availability before deploying.
 
 ```bash
 hf msft-foundry models list
 hf msft-foundry models list --search "gemma 4"
 hf msft-foundry models google/gemma-4-26B-A4B-it deployment-templates
+hf msft-foundry deploy google/gemma-4-26B-A4B-it --name my-gemma-4
 ```
 
-```console
-NAME                                          ACCELERATOR_TYPE  ACCELERATOR_COUNT  MAX_MODEL_LEN  ENVIRONMENT             PRICE_PER_HOUR  DEFAULT
-google--gemma-4-26b-a4b-it--256k-amd-mi300x   MI300_192GB       1                  262144         hf-vllm-v0-33-0-amd     7.91            False
-google--gemma-4-26b-a4b-it--256k-nvidia-a100  A100_80GB         1                  262144         hf-vllm-v0-33-0-nvidia  3.95            True
-google--gemma-4-26b-a4b-it--256k-nvidia-h100  H100_80GB         1                  262144         hf-vllm-v0-33-0-nvidia  7.91            False
-google--gemma-4-26b-a4b-it--256k-nvidia-h200  H200_141GB        1                  262144         hf-vllm-v0-33-0-nvidia  9.1             False
-```
+The CLI uses the default recipe and waits until the deployment is ready, which typically takes around 20 minutes. Use `--deployment-template 256k-nvidia-h100` to select another recipe or `--no-wait` to return immediately, and keep the generated deployment name from the command output if you omit `--name`.
 
-Check `hf msft-foundry quota` and `hf msft-foundry capacity` for the accelerators you need, then deploy with the default template, or another one via `--deployment-template`:
+## Use the endpoint
 
-```bash
-hf msft-foundry deploy google/gemma-4-26B-A4B-it
-hf msft-foundry deploy google/gemma-4-26B-A4B-it --deployment-template 256k-nvidia-h100
-```
-
-It waits until the deployment is ready, which takes about 20 minutes, unless `--no-wait` is set. The deployment name defaults to `<author>--<model>--<timestamp>` e.g. `google--gemma-4-26b-a4b-it--5083872`, or set it with `--name`.
-
-Then send OpenAI-compatible requests with the deployment name as the `model`:
+Export the key and the base URL ending in `/openai/v1`, then use the deployment name as the model ID when calling `/chat/completions` or, for supported models and templates, `/responses`.
 
 ```bash
 export OPENAI_BASE_URL=$(hf msft-foundry accounts info -o json | jq -r .openai_base_url)
@@ -68,20 +56,87 @@ from openai import OpenAI
 
 client = OpenAI()
 completion = client.chat.completions.create(
-    model="google--gemma-4-26b-a4b-it--5083872",
+    model="my-gemma-4",
     messages=[{"role": "user", "content": "What's the capital of France?"}],
     max_completion_tokens=1024,
 )
 print(completion.choices[0].message.content)
 ```
 
-> [!NOTE]
-> Deployments can't reach the internet, so send images as base64-encoded data URIs rather than URLs.
+Send images as base64 data URIs because deployments cannot fetch remote URLs.
 
-Finally, delete the deployment to stop paying for it:
+## Coding agents
+
+Choose a model that supports tool calling if the agent needs to read or edit files, then launch Pi 1.x or OpenCode 2.x from your project directory once the deployment reaches `Succeeded`. The harness executable must be on `PATH`, and your Azure identity needs permission to list the Microsoft Foundry account keys. [Install Pi](https://docs.pi.dev/latest/quickstart) or [install OpenCode](https://opencode.ai/download).
 
 ```bash
-hf msft-foundry deployments delete google--gemma-4-26b-a4b-it--5083872 --wait
+hf msft-foundry pi my-gemma-4
+hf msft-foundry opencode my-gemma-4
+```
+
+Both launchers configure the endpoint and credentials automatically, and you can omit the deployment name when `FOUNDRY_DEPLOYMENT` is set or the account has one ready deployment. Pi stores sessions in a profile per account and deployment, while OpenCode starts a standalone server and uses its usual session storage.
+
+Pass harness arguments after `--`, using `--continue` to resume the latest session or `--session` to select a specific one.
+
+```bash
+hf msft-foundry pi my-gemma-4 -- -p "Remember the codename Cedar."
+hf msft-foundry pi my-gemma-4 -- --continue -p "What was the codename?"
+hf msft-foundry opencode my-gemma-4 -- run "Remember the codename Cedar."
+hf msft-foundry opencode my-gemma-4 -- run --continue "What was the codename?"
+```
+
+<details>
+<summary>Manual provider setup</summary>
+
+The examples use the [endpoint and key](#use-the-endpoint) with the 256K Gemma 4 template and a 4,096 token output limit, so adjust the context limit to match your deployment template.
+
+For OpenCode, merge this provider into your project's `opencode.json` and select `foundry/my-gemma-4`.
+
+```json
+{
+  "providers": {
+    "foundry": {
+      "package": "@opencode/ai/providers/openai-compatible",
+      "env": ["OPENAI_API_KEY"],
+      "settings": {"baseURL": "{env:OPENAI_BASE_URL}"},
+      "models": {
+        "my-gemma-4": {
+          "name": "Gemma 4 26B A4B",
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 262144, "output": 4096}
+        }
+      }
+    }
+  }
+}
+```
+
+For Pi, merge this provider into `~/.pi/agent/models.json`, set `baseUrl` to the value of `OPENAI_BASE_URL`, and select `foundry/my-gemma-4`.
+
+```json
+{
+  "providers": {
+    "foundry": {
+      "baseUrl": "https://my-foundry.services.ai.azure.com/openai/v1",
+      "api": "openai-completions",
+      "apiKey": "$OPENAI_API_KEY",
+      "compat": {"maxTokensField": "max_completion_tokens"},
+      "models": [
+        {"id": "my-gemma-4", "name": "Gemma 4 26B A4B", "input": ["text"], "contextWindow": 262144, "maxTokens": 4096}
+      ]
+    }
+  }
+}
+```
+
+</details>
+
+## Agent skill
+
+Install the `hf-msft-foundry` skill from your project directory to give your agent the steps for finding models, choosing a recipe, and managing deployments. [Read the skill](https://github.com/alvarobartt/hf-msft-foundry/blob/main/skills/hf-msft-foundry/SKILL.md).
+
+```bash
+npx skills add alvarobartt/hf-msft-foundry --skill hf-msft-foundry
 ```
 
 ## Commands
@@ -93,9 +148,8 @@ hf msft-foundry deployments delete google--gemma-4-26b-a4b-it--5083872 --wait
 | `deployments {list,status,wait,scale,delete}` | Manage the deployments |
 | `accounts {list,info,keys,create}` | Manage the Microsoft Foundry resources |
 | `capacity` / `quota` | Show the available accelerators and the managed compute quota |
+| `pi [<deployment>]` / `opencode [<deployment>]` | Launch a coding agent against a ready chat deployment |
 
-All commands accept `-o json` for machine-readable output, including errors.
+For machine-readable results and errors, pass `-o json` to `hf msft-foundry`.
 
-## Agents
-
-The [`hf-msft-foundry` skill](https://github.com/alvarobartt/hf-msft-foundry/blob/main/skills/hf-msft-foundry/SKILL.md) teaches agents how to find, deploy, use and delete models on Microsoft Foundry with `hf-msft-foundry`.
+When you finish using the deployment, run `hf msft-foundry deployments delete my-gemma-4 --wait` to stop billing.

@@ -9,6 +9,7 @@ from azure.core.exceptions import ClientAuthenticationError
 
 from hf_msft_foundry.client import Foundry
 from hf_msft_foundry.errors import FoundryError
+from hf_msft_foundry.harnesses import HARNESSES, launch
 
 logger = logging.getLogger("hf_msft_foundry")
 
@@ -66,7 +67,7 @@ def emit(args: argparse.Namespace, data: Any, columns: list[str] | None = None, 
         sys.stdout.write(render(data, columns) + "\n")
 
 
-def run(args: argparse.Namespace) -> None:
+def run(args: argparse.Namespace) -> int | None:
     foundry = Foundry(subscription_id=args.subscription_id, account_name=args.account)
     action = getattr(args, "action", None)
     model_id = getattr(args, "model_id", None)
@@ -123,6 +124,9 @@ def run(args: argparse.Namespace) -> None:
             location = args.location or foundry.account.location
             empty = f"No managed compute quota in {location} for subscription {foundry.subscription_id}"
             emit(args, foundry.accounts.quota(location), ["accelerator_type", "used", "limit"], empty)
+        case "pi" | "opencode", _:
+            return launch(foundry, args.command, args.deployment, args.harness_args)
+    return None
 
 
 def parser() -> argparse.ArgumentParser:
@@ -202,15 +206,32 @@ def parser() -> argparse.ArgumentParser:
     quota = commands.add_parser("quota", parents=[common], help="Show the managed compute quota")
     quota.add_argument("--location", help="Azure region, defaults to the Microsoft Foundry resource's")
 
+    for harness in HARNESSES:
+        agent = commands.add_parser(
+            harness, parents=[common], help=f"Launch {harness} with a Microsoft Foundry deployment"
+        )
+        agent.add_argument(
+            "deployment",
+            nargs="?",
+            help="Deployment name, defaults to FOUNDRY_DEPLOYMENT or the only ready deployment",
+        )
+        agent.epilog = f"Put {harness} arguments after --. Output from the harness uses its own format."
+
     return root
 
 
 def main() -> int:
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
     logger.setLevel(logging.INFO)
-    args = parser().parse_args()
+    arguments = sys.argv[1:]
+    harness_args: list[str] = []
+    if arguments and arguments[0] in HARNESSES and "--" in arguments:
+        separator = arguments.index("--")
+        arguments, harness_args = arguments[:separator], arguments[separator + 1 :]
+    args = parser().parse_args(arguments)
+    args.harness_args = harness_args
     try:
-        run(args)
+        return run(args) or 0
     except (FoundryError, ValueError, FileNotFoundError, ClientAuthenticationError) as error:
         message = error.message if isinstance(error, ClientAuthenticationError) else str(error)
         if isinstance(error, ClientAuthenticationError):
@@ -222,7 +243,6 @@ def main() -> int:
         return 1
     except KeyboardInterrupt:
         return 130
-    return 0
 
 
 if __name__ == "__main__":
