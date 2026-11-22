@@ -68,13 +68,17 @@ def emit(args: argparse.Namespace, data: Any, columns: list[str] | None = None, 
 
 def run(args: argparse.Namespace) -> None:
     foundry = Foundry(subscription_id=args.subscription_id, account_name=args.account)
-    if args.command == "models" and args.model_id is not None and args.search:
-        raise ValueError("Use either a model ID or --search, not both")
     action = getattr(args, "action", None)
-    if args.command == "models" and args.model_id is not None:
-        action = action or "info"
+    model_id = getattr(args, "model_id", None)
+    if args.command == "models":
+        if model_id == "list" and action is None:
+            model_id = None
+        if model_id is not None:
+            if args.search:
+                raise ValueError("Use either a model ID or --search, not both")
+            action = action or "info"
     match args.command, action:
-        case "models", None if args.model_id is None:
+        case "models", None if model_id is None:
             scope = f"match '{args.search}'" if args.search else "are available"
             empty = f"No models {scope} in the Hugging Face collection on Microsoft Foundry"
             emit(args, foundry.registry.models(args.search), empty=empty)
@@ -142,10 +146,12 @@ def parser() -> argparse.ArgumentParser:
         "models",
         parents=[common],
         help="Browse the Hugging Face collection on Microsoft Foundry",
-        description="List the models, or show a model and its deployment templates, e.g. "
+        description="Run `hf msft-foundry models list` to list models, or see a model’s deployment templates with "
         "`hf msft-foundry models google/gemma-4-31B-it deployment-templates`",
     )
-    models.add_argument("model_id", nargs="?", help="Hub ID, e.g. google/gemma-4-31B-it, lists the models if omitted")
+    models.add_argument(
+        "model_id", nargs="?", help="Pass list or omit this argument to browse, or enter a Hub ID to show a model"
+    )
     models.add_argument("action", nargs="?", choices=["info", "deployment-templates"], help="Defaults to info")
     models.add_argument("--search", help="Filter the models by name, e.g. 'gemma 4'")
     models.add_argument("--version", help="Model version, defaults to the latest")

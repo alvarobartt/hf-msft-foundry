@@ -31,10 +31,11 @@ hf msft-foundry accounts create my-foundry --resource-group my-foundry-rg --loca
 | [`nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8`](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8) | 120B (12B active) | 2 x NVIDIA H100 at 256K context |
 | [`google/gemma-4-26B-A4B-it`](https://huggingface.co/google/gemma-4-26B-A4B-it) | 26B (4B active) | 1 x NVIDIA A100 at 256K context |
 
-Find a model and its deployment templates, i.e. the accelerators, context length and hourly price per instance:
+Browse the catalog, search for a model, or see its deployment templates with accelerator, context length and hourly price per instance.
 
 ```bash
-hf msft-foundry models --search "gemma 4"
+hf msft-foundry models list
+hf msft-foundry models list --search "gemma 4"
 hf msft-foundry models google/gemma-4-26B-A4B-it deployment-templates
 ```
 
@@ -87,7 +88,7 @@ hf msft-foundry deployments delete google--gemma-4-26b-a4b-it--5083872 --wait
 
 | Command | Description |
 |---|---|
-| `models [<model> [info\|deployment-templates]] [--search] [--version]` | List models, show one, or list its deployment templates |
+| `models [list\|<model> [info\|deployment-templates]] [--search] [--version]` | List models, show one, or list its deployment templates |
 | `deploy <model> [--deployment-template] [--name] [--instances] [--version] [--no-wait]` | Deploy a model |
 | `deployments {list,status,wait,scale,delete}` | Manage the deployments |
 | `accounts {list,info,keys,create}` | Manage the Microsoft Foundry resources |
