@@ -40,4 +40,4 @@ curl "$(hf msft-foundry accounts info -o json | jq -r .openai_base_url)/chat/com
 - Deployments can't reach the internet, send images as base64 data URIs instead of URLs.
 - Never print or store the API keys beyond what's needed for the request.
 
-Launch a coding harness with `hf msft-foundry pi <deployment>` or `hf msft-foundry opencode <deployment>`, placing any harness-specific arguments after `--`. [Coding agent setup in the README](https://github.com/alvarobartt/hf-msft-foundry/blob/main/README.md#coding-agents)
+Launch a coding harness with `hf msft-foundry pi <deployment>` or `hf msft-foundry opencode <deployment>`, placing any harness-specific arguments after `--`. [Coding agent setup in the README](https://github.com/huggingface/hf-msft-foundry/blob/main/README.md#coding-agents)
