@@ -5,7 +5,7 @@
 ## Installation
 
 ```bash
-hf extensions install alvarobartt/hf-msft-foundry
+hf extensions install huggingface/hf-msft-foundry
 ```
 
 Install the standalone `hf-msft-foundry` command with `pip install hf-msft-foundry` or `uv tool install hf-msft-foundry`. [PyPI](https://pypi.org/project/hf-msft-foundry/)
@@ -130,10 +130,10 @@ For Pi, merge this provider into `~/.pi/agent/models.json`, set `baseUrl` to the
 
 ## Agent skill
 
-Install the `hf-msft-foundry` skill from your project directory to give your agent the steps for finding models, choosing a recipe, and managing deployments. [Read the skill](https://github.com/alvarobartt/hf-msft-foundry/blob/main/skills/hf-msft-foundry/SKILL.md).
+Install the `hf-msft-foundry` skill from your project directory to give your agent the steps for finding models, choosing a recipe, and managing deployments. [Read the skill](https://github.com/huggingface/hf-msft-foundry/blob/main/skills/hf-msft-foundry/SKILL.md).
 
 ```bash
-npx skills add alvarobartt/hf-msft-foundry --skill hf-msft-foundry
+npx skills add huggingface/hf-msft-foundry --skill hf-msft-foundry
 ```
 
 ## Commands

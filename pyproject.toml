@@ -15,9 +15,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/alvarobartt/hf-msft-foundry"
-Repository = "https://github.com/alvarobartt/hf-msft-foundry"
-Issues = "https://github.com/alvarobartt/hf-msft-foundry/issues"
+Homepage = "https://github.com/huggingface/hf-msft-foundry"
+Repository = "https://github.com/huggingface/hf-msft-foundry"
+Issues = "https://github.com/huggingface/hf-msft-foundry/issues"
 
 [project.scripts]
 hf-msft-foundry = "hf_msft_foundry.cli:main"
